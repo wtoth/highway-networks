@@ -4,8 +4,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 from torchvision.transforms import v2
-from PIL import Image
-
 
 class Cifar10Dataset(Dataset):
     def __init__(self, root_directory="", dataset="data/train.csv", transform=None):
@@ -19,7 +17,7 @@ class Cifar10Dataset(Dataset):
     def __getitem__(self, idx: int) -> tuple:
         image_path = self.image_directory.iloc[idx, self.image_directory.columns.get_loc("filenames")]
         label = self.image_directory.iloc[idx, self.image_directory.columns.get_loc("labels")]
-        data = torch.from_numpy(np.load(self.root_directory + image_path))
+        data = torch.from_numpy(np.load(self.root_directory + image_path)).reshape((32,32,3))
 
         if self.transform:
             data = self.transform(data)
