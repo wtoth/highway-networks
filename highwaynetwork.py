@@ -3,12 +3,31 @@ from torch import nn
 import torch.nn.functional as F
 
 class HighwayNetwork(nn.Module):
-    def __init__(self):
+    def __init__(self, num_highway_layers=50, channels=64, classes=10):
         super().__init__()
-        pass
+        
+        # creates a consistent number of channels to be used in the highway layers
+        self.input = nn.Sequential(
+            nn.Conv2d(3, channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(channels),
+            nn.ReLU()
+        )
+        self.highway_layers = self._build_highway_layers(num_layers=num_highway_layers, channels=channels)
+        self.output = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Linear(channels, classes)
+        ) 
 
     def forward(self, x):
-        pass
+        x = self.input(x)
+        x = self.highway_layers(x)
+        x = self.output(x)
+        return x
+
+    def _build_highway_layers(self, num_layers, channels, kernel_size=3):
+        layers = [ConvolutionalHighwayBlock(channels=channels, kernel_size=kernel_size) for _ in range(num_layers)]
+        return nn.Sequential(*layers)
 
 class ConvolutionalHighwayBlock(nn.Module):
     def __init__(self, channels, kernel_size=3):
