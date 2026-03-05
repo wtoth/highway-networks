@@ -35,19 +35,23 @@ class ConvolutionalHighwayBlock(nn.Module):
         padding = kernel_size // 2
         self.h = nn.Conv2d(channels, channels, kernel_size, padding=padding)
         self.t = nn.Conv2d(channels, channels, kernel_size, padding=padding)
+        nn.init.normal_(self.t.bias, mean=-2, std=0.1) # per paper they set the bias to a negative value
     
     def forward(self, x):
         H = F.relu(self.h(x))
-        T = F.sigmoid(self.t(x))
-        return H*T + x *(1-T)
+        T = torch.sigmoid(self.t(x))
+        return H*T + x *(1-T) # !!! This is element wise multiplication not dot products 
+        # so the [0,1] bounding principle holds
 
 class LinearHighwayBlock(nn.Module):
     def __init__(self, size):
         super().__init__()
         self.H = nn.Linear(size, size)
         self.T = nn.Linear(size, size)
+        nn.init.normal_(self.T.bias, mean=-2, std=0.1) # per paper they set the bias to a negative value
     
     def forward(self, x):
         H = F.relu(self.H(x))
-        T = F.sigmoid(self.T(x))
-        return H*T + x *(1-T)
+        T = torch.sigmoid(self.T(x))
+        return H*T + x *(1-T) # !!! This is element wise multiplication not dot products 
+        # so the [0,1] bounding principle holds
