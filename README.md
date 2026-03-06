@@ -15,7 +15,7 @@ uv run cifar10_data_processing.py
 This will create a data folder with both training and test directories
 
 ### Training
-Before kicking off training you should update the weights and biases variables in train.py to match your account.<br>
+Before kicking off training you should update the weights and biases variables `entity` and `project` in `init_logging()` in train.py to match your account.<br>
 If not using Weights and Biases (not recommended) you can set logs to `False` in main.py<br>
 To kick off training you can run<br>
 ```uv run main.py```
