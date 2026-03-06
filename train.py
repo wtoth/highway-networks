@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -16,18 +17,19 @@ class HighwayNetworkModel:
         self.device = device
         self.log = log
 
-    def train(self, root_directory, hyperparams, spatial_transforms, color_transforms, validation_transforms):
+    def train(self, root_directory, hyperparams, train_transforms, validation_transforms):
         if self.log:
             wandb_log = self.init_logging(hyperparams.batch_size, hyperparams.learning_rate, hyperparams.momentum, hyperparams.weight_decay, hyperparams.num_epochs)
 
         optimizer = torch.optim.SGD(self.model.parameters(), lr=hyperparams.learning_rate, momentum=hyperparams.momentum, weight_decay=hyperparams.weight_decay)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.1)
+        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.1)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100, eta_min=1e-4)
         
         # Create Datasets 
-        training_dataset = Cifar10Dataset(root_directory, dataset="train.csv", transform=spatial_transforms)
+        training_dataset = Cifar10Dataset(root_directory, dataset="data/train.csv", transform=train_transforms)
         train_dataloader = DataLoader(training_dataset, batch_size=hyperparams.batch_size, shuffle=True)
         
-        val_dataset = Cifar10Dataset(root_directory, dataset="test.csv", transform=validation_transforms)
+        val_dataset = Cifar10Dataset(root_directory, dataset="data/test.csv", transform=validation_transforms)
         val_dataloader = DataLoader(val_dataset, batch_size=hyperparams.batch_size, shuffle=False)
 
         best_loss = float("inf")
@@ -57,26 +59,30 @@ class HighwayNetworkModel:
                     wandb_log.log({"eval/loss": loss.item()}, step=logging_steps)
                     logging_steps += 1
             
-            validation_loss, validation_accuracy, validation_top_5_accuracy = self.validation(val_dataset, val_dataloader) 
-            scheduler.step(validation_loss) # perform lr reduction if validation loss doesn't improve
+            top_k=3
+            validation_loss, validation_accuracy, validation_top_k_accuracy = self.validation(val_dataset, val_dataloader, top_k) 
+            # scheduler.step(validation_loss) # for ReduceLROnPlateau: perform lr reduction if validation loss doesn't improve
+            scheduler.step() # for CosineAnnealingLR
 
             print(f"Epoch: {epoch+1} Training Loss: {running_loss/len(train_dataloader)}")
-            print(f" Validation Loss: {validation_loss} Validation Accuracy: {validation_accuracy} Validation Top 5 Accuracy {validation_top_5_accuracy}")
+            print(f" Validation Loss: {validation_loss} Validation Accuracy: {validation_accuracy} Validation Top {top_k} Accuracy {validation_top_k_accuracy}")
             if self.log:
                 wandb_log.log({
+                    "train/loss": running_loss / len(train_dataloader),
                     "validation_loss": validation_loss,
                     "validation_accuracy": validation_accuracy,
-                    "validation_top_5_accuracy": validation_top_5_accuracy,
+                    f"validation_top_{top_k}_accuracy": validation_top_k_accuracy,
                     "learning_rate": optimizer.param_groups[0]['lr']
                 })
             if validation_loss < best_loss:
+                os.makedirs("model_weights", exist_ok=True)
                 torch.save(self.model.state_dict(), "model_weights/best_val_loss.pt")
                 best_loss = validation_loss
 
-    def validation(self, val_dataset, val_dataloader):
+    def validation(self, val_dataset, val_dataloader, top_k=5):
         total_loss = 0
         correct = 0
-        top_5_correct = 0
+        top_k_correct = 0
 
         self.model.eval() # set model to eval mode so the weights won't get changed
         with torch.no_grad():
@@ -92,14 +98,14 @@ class HighwayNetworkModel:
                 # get accuracy
                 preds = outputs.argmax(dim=1)
                 correct += (preds == labels).sum().item()
-                top_5_preds = torch.topk(outputs, 5, dim=1).indices
-                top_5_correct += (top_5_preds == labels.unsqueeze(1)).any(dim=1).sum().item()
+                top_k_preds = torch.topk(outputs, top_k, dim=1).indices
+                top_k_correct += (top_k_preds == labels.unsqueeze(1)).any(dim=1).sum().item()
 
         avg_loss = total_loss / len(val_dataloader)  
         accuracy = correct / len(val_dataset)
-        top_5_accuracy = top_5_correct / len(val_dataset)
+        top_k_accuracy = top_k_correct / len(val_dataset)
 
-        return avg_loss, accuracy, top_5_accuracy
+        return avg_loss, accuracy, top_k_accuracy
     
     def init_logging(self, batch_size, learning_rate, momentum, weight_decay, num_epochs):
         wandb_log = wandb.init(
