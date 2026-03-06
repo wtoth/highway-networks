@@ -3,7 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 
 class HighwayNetwork(nn.Module):
-    def __init__(self, num_highway_layers=50, channels=64, classes=10):
+    def __init__(self, num_highway_layers=20, channels=64, classes=10):
         super().__init__()
         
         # creates a consistent number of channels to be used in the highway layers
@@ -35,7 +35,7 @@ class ConvolutionalHighwayBlock(nn.Module):
         padding = kernel_size // 2
         self.h = nn.Conv2d(channels, channels, kernel_size, padding=padding)
         self.t = nn.Conv2d(channels, channels, kernel_size, padding=padding)
-        nn.init.normal_(self.t.bias, mean=-2, std=0.1) # per paper they set the bias to a negative value
+        nn.init.normal_(self.t.bias, mean=-5, std=1.0) # per paper they set the bias to a negative value
     
     def forward(self, x):
         H = F.relu(self.h(x))
@@ -48,7 +48,7 @@ class LinearHighwayBlock(nn.Module):
         super().__init__()
         self.H = nn.Linear(size, size)
         self.T = nn.Linear(size, size)
-        nn.init.normal_(self.T.bias, mean=-2, std=0.1) # per paper they set the bias to a negative value
+        nn.init.normal_(self.T.bias, mean=-5, std=1.0) # per paper they set the bias to a negative value
     
     def forward(self, x):
         H = F.relu(self.H(x))
